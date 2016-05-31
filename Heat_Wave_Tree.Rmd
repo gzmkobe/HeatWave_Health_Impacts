@@ -1,0 +1,173 @@
+---
+title: "Untitled"
+author: "Zhiming Guo"
+date: "May 23, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+##load data
+load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
+hw=data.frame(all.hws)
+colnames(hw)[28]<="mean.temp.1"
+##################################################
+################################ Regression Tree
+library(MASS)
+library(tree)
+
+
+### !!! data hw doesn't include post.estimate but has Estimate
+hw=hw[,-c(1,6,7,20,22,31:35)] ##Since Regression Tree only allows maximum 32 factors, also, there are some useless columns 
+
+########################### If reponse is Estimate
+### Single Tree
+set.seed(1) ##generate fixed random numbers
+train = sample (1: nrow (hw), nrow(hw)/2)
+tree.hw = tree(Estimate~.,hw, subset = train )
+summary (tree.hw)
+## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"          "mean.temp"
+plot(tree.hw)
+text(tree.hw,pretty=0)
+ cv.hw =cv.tree(tree.hw)
+plot(cv.hw$size,cv.hw$dev,type='b')
+## The plot tells us the best would be 1 node, but it doesn;t make sense.
+
+
+## disregard pruned tree, but using unpruned tree
+yhat=predict(tree.hw,newdata=hw[-train,])
+hw.test=hw[-train ,'Estimate']
+plot(yhat,hw.test)
+abline(0 ,1)
+mean((yhat - hw.test)^2)
+## MSE=0.03582249
+```
+
+```{r}
+#### Bagging
+library(randomForest)
+set.seed(1)
+bag.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=24,importance=TRUE)
+yhat.bag=predict(bag.hw,newdata=hw[-train ,])
+plot(yhat.bag,hw.test)
+abline(0,1)
+mean((yhat.bag - hw.test)^2)
+##  MSE=0.03629245 even bigger than single tree.
+importance(bag.hw)
+varImpPlot(bag.hw)
+```
+
+```{r}
+#### random forest
+set.seed(1)
+rf.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=5,importance=TRUE)
+yhat.bag=predict(rf.hw,newdata=hw[-train ,])
+plot(yhat.bag,hw.test)
+abline(0,1)
+mean((yhat.bag - hw.test)^2)
+## MSE=0.0361415
+importance(rf.hw)
+varImpPlot(rf.hw)
+```
+
+```{r}
+### boosting
+library(gbm)
+set.seed(1)
+boost.hw=gbm(Estimate~.,data = hw[train,],distribution = "gaussian",n.trees=5000,interaction.depth = 4)
+summary(boost.hw)
+par(mfrow =c(1,2) )
+plot( boost.hw ,i="start.doy")
+plot( boost.hw,i="Ppoverty")
+yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =5000)
+mean((yhat.boost - hw.test)^2)
+
+## MSE=0.03452156
+```
+
+
+
+
+
+
+
+```{r}
+#### If response is post.est
+load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
+hw=data.frame(all.hws)
+colnames(hw)[28]<="mean.temp.1"
+
+hw=hw[,-c(1,6,7,20:22,31:33,35)]
+### Single Tree
+set.seed(1) ##generate fixed random numbers
+train = sample (1: nrow (hw), nrow(hw)/2)
+tree.hw = tree(post.estimate~.,hw, subset = train )
+summary (tree.hw)
+## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"          "mean.temp"
+plot(tree.hw)
+text(tree.hw,pretty=0)
+cv.hw =cv.tree(tree.hw)
+plot(cv.hw$size,cv.hw$dev,type='b')
+## The plot tells us the best would be 4 node.
+
+## Continue using Prune
+prune.hw =prune.tree(tree.hw,best=4)  ## error
+plot(prune.hw)
+text(prune.hw,pretty =0)
+
+## disregard pruned tree, but using unpruned tree
+yhat=predict(tree.hw,newdata=hw[-train,])
+hw.test=hw[-train ,'post.estimate']
+plot(yhat,hw.test)
+abline(0 ,1)
+mean((yhat - hw.test)^2)
+## MSE=0.0009294525 Really lower!
+```
+
+```{r}
+#### Bagging
+library(randomForest)
+set.seed(1)
+bag.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=24,importance=TRUE)
+yhat.bag=predict(bag.hw,newdata=hw[-train ,])
+plot(yhat.bag,hw.test)
+abline(0,1)
+mean((yhat.bag - hw.test)^2)
+## MSE=0.000927588 does't change a lot
+importance(bag.hw)
+varImpPlot(bag.hw)
+```
+
+```{r}
+#### random forest
+set.seed(1)
+rf.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=5,importance=TRUE)
+yhat.bag=predict(rf.hw,newdata=hw[-train ,])
+plot(yhat.bag,hw.test)
+abline(0,1)
+mean((yhat.bag - hw.test)^2)
+## doesn't change a lot
+importance(rf.hw)
+varImpPlot(rf.hw)
+
+```
+
+```{r}
+### boosting
+set.seed(1)
+boost.hw=gbm(post.estimate~.,data = hw[train,],distribution = "gaussian",n.trees=5000,interaction.depth = 4)
+summary(boost.hw)
+par(mfrow =c(1,3))
+plot( boost.hw ,i="mean.temp.quantile")
+plot( boost.hw,i="pop100")
+plot( boost.hw,i="start.doy")
+yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =5000)
+mean((yhat.boost - hw.test)^2)
+
+## MSE=0.0009254345
+```
+
+Test

@@ -1,0 +1,67 @@
+---
+title: "Heatwave.gLm"
+author: "Zhiming Guo"
+date: "May 20, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
+hw=data.frame(all.hws)
+colnames(hw)[28]<="mean.temp.1"
+y1=hw$Estimate
+y2=hw$post.estimate
+
+## Test individual variables and response
+library(splines)
+library(ggplot2)
+library(xtable)
+xvar1 <- c("mean.temp","max.temp","min.temp","length","start.doy","days.above.80","days.above.85","days.above.90","days.above.95","days.above.99th", "days.above.99.5th","mean.temp.quantile","max.temp.quantile","min.temp.quantile","pop100","Ppoverty","Ppoverty75p","Purban","P75p","pop.density", "mean.temp.1","mean.summer.temp")
+xvar2 <- c("start.month","first.in.season")
+
+for (x in xvar1){
+  print(x)
+  my.x <-hw[,x]
+  my.mod1 <- glm(y1~my.x)
+  print(summary(my.mod1))
+  #plot(my.x, y1, main = x, xlab = x)
+  to_plot <- data.frame(my.x, y1, y2)
+  a <- ggplot(to_plot, aes(x = my.x, y = y1)) + geom_point(alpha = 0.3) + geom_smooth() + xlab(x) + ggtitle(x)
+  print(a)
+  my.mod2 <- glm(y2~my.x)
+  print(summary(my.mod2))
+  #plot(my.x, y2, main = x, xlab = x)
+  b <- ggplot(to_plot, aes(x = my.x, y = y2)) + geom_point() + geom_smooth(span = 0.3) + xlab(x) + ggtitle(x)
+  print(b)
+}
+
+for (x in xvar2){
+  print(x)
+  my.x <-hw[,x]
+  my.mod1 <- glm(y1~my.x)
+  print(summary(my.mod1))
+  #plot(my.x, y1, main = x, xlab = x)
+  to_plot <- data.frame(my.x, y1, y2)
+  a <- ggplot(to_plot, aes(x = my.x, y = y1)) + geom_point(alpha = 0.3) + geom_smooth(method = "lm") + xlab(x) + ggtitle(x)
+  print(a)
+  my.mod2 <- glm(y2~my.x)
+  print(summary(my.mod2))
+  #plot(my.x, y2, main = x, xlab = x)
+  b <- ggplot(to_plot, aes(x = my.x, y = y2)) + geom_point() + geom_smooth(span = 0.3,method = "lm") + xlab(x) + ggtitle(x)
+  print(b)
+}
+```
+
+```{r}
+pairs(xvar1)
+```
+
+
+
+
+
+
