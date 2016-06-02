@@ -61,9 +61,23 @@ varImpPlot(bag.hw)
 ```
 
 ```{r}
+### Tuning
+fitControl=trainControl(method="cv",
+                        number=10,)
+
+
+            
+
+```
+
+```{r}
 #### random forest
+library(caret)
 set.seed(1)
-rf.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=5,importance=TRUE)
+rf.hw=randomForest(Estimate~.,
+                   data=hw,subset=train,
+                   mtry=2,
+                   importance=TRUE)
 yhat.bag=predict(rf.hw,newdata=hw[-train ,])
 plot(yhat.bag,hw.test)
 abline(0,1)
@@ -71,7 +85,24 @@ mean((yhat.bag - hw.test)^2)
 ## MSE=0.0361415
 importance(rf.hw)
 varImpPlot(rf.hw)
+
+
+#### Tuning to find best mtry for Random Forest
+set.seed(1)
+tuning.rf.hw=train(Estimate~.,
+                   data=hw,subset=train,
+                   method = "rf",
+                   trControl = fitControl,
+                   ntree = 10,
+                   importance = TRUE,
+                   metric="RMSE",
+                   maximize = FALSE,
+                   tuneLength=5)
+tuning.rf.hw
+plot(tuning.rf.hw)
+#### the optimal mtry is 2.
 ```
+
 
 ```{r}
 ### boosting
@@ -86,13 +117,22 @@ yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =5000)
 mean((yhat.boost - hw.test)^2)
 
 ## MSE=0.03452156
+
+#### Tuning to find best mtry for Boostingt
+gbmgrid=expand.grid(.interaction.depth = seq(1, 7, by = 2),
+                    .n.trees = seq(100, 1000, by = 50),
+                    .shrinkage = c(0.01, 0.1),
+                    .n.minobsinnode=10)
+set.seed(1)
+
+tuning.boost.hw=train(Estimate~.,data=hw[train,],
+                      method="gbm",
+                      tuneGrid=gbmgrid,
+                      trControl=fitControl,
+                      verbose=FALSE)
+tuning.boost.hw
+plot(tuning.boost.hw)
 ```
-
-
-
-
-
-
 
 ```{r}
 #### If response is post.est
@@ -153,6 +193,21 @@ mean((yhat.bag - hw.test)^2)
 importance(rf.hw)
 varImpPlot(rf.hw)
 
+
+#### Tuning to find best mtry for Random Forest
+set.seed(1)
+tuning.rf.hw=train(post.estimate~.,
+                   data=hw,subset=train,
+                   method = "rf",
+                   trControl = fitControl,
+                   ntree = 10,
+                   importance = TRUE,
+                   metric="RMSE",
+                   maximize = FALSE,
+                   tuneLength=5)
+tuning.rf.hw
+plot(tuning.rf.hw)
+#### the optimal mtry is 2.
 ```
 
 ```{r}
@@ -168,6 +223,19 @@ yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =5000)
 mean((yhat.boost - hw.test)^2)
 
 ## MSE=0.0009254345
-```
 
-Test
+#### Tuning to find best mtry for Boostingt
+gbmgrid=expand.grid(.interaction.depth = seq(1, 7, by = 2),
+                    .n.trees = seq(100, 1000, by = 50),
+                    .shrinkage = c(0.01, 0.1),
+                    .n.minobsinnode=10)
+set.seed(1)
+
+tuning.boost.hw=train(post.estimate~.,data=hw[train,],
+                      method="gbm",
+                      tuneGrid=gbmgrid,
+                      trControl=fitControl,
+                      verbose=FALSE)
+tuning.boost.hw
+plot(tuning.boost.hw)
+```
