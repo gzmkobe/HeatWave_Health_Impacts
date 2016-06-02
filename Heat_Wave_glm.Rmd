@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
+load("data-raw/ListOfAllHeatwaves.Rdata")
 hw=data.frame(all.hws)
 colnames(hw)[28]<="mean.temp.1"
 y1=hw$Estimate
