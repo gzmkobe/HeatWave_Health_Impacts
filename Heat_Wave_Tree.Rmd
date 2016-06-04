@@ -12,8 +12,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 ##load data
 load("data-raw/ListOfAllHeatwaves.Rdata")
+library(lubridate)
 hw=data.frame(all.hws)
 colnames(hw)[28]<="mean.temp.1"
+hw$start.date=year(all.hws$start.date)
 ##################################################
 ################################ Regression Tree
 library(MASS)
@@ -21,7 +23,7 @@ library(tree)
 
 
 ### !!! data hw doesn't include post.estimate but has Estimate
-hw=hw[,-c(1,6,7,20,22,31:35)] ##Since Regression Tree only allows maximum 32 factors, also, there are some useless columns 
+hw=hw[,-c(1,7,20,22,31:35)] ##Since Regression Tree only allows maximum 32 factors, also, there are some useless columns 
 
 ########################### If reponse is Estimate
 ### Single Tree
@@ -29,12 +31,12 @@ set.seed(1) ##generate fixed random numbers
 train = sample (1: nrow (hw), nrow(hw)/2)
 tree.hw = tree(Estimate~.,hw, subset = train )
 summary (tree.hw)
-## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"          "mean.temp"
+## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"  "start.date"     
 plot(tree.hw)
 text(tree.hw,pretty=0)
- cv.hw =cv.tree(tree.hw)
+cv.hw =cv.tree(tree.hw)
 plot(cv.hw$size,cv.hw$dev,type='b')
-## The plot tells us the best would be 1 node, but it doesn;t make sense.
+## The plot tells us the best would be 4 node.
 
 
 ## disregard pruned tree, but using unpruned tree
@@ -43,25 +45,26 @@ hw.test=hw[-train ,'Estimate']
 plot(yhat,hw.test)
 abline(0 ,1)
 mean((yhat - hw.test)^2)
-## MSE=0.03582249
+## MSE=0.03445412
 ```
 
 ```{r}
 #### Bagging
 library(randomForest)
 set.seed(1)
-bag.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=24,importance=TRUE)
+bag.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
 yhat.bag=predict(bag.hw,newdata=hw[-train ,])
 plot(yhat.bag,hw.test)
 abline(0,1)
 mean((yhat.bag - hw.test)^2)
-##  MSE=0.03629245 even bigger than single tree.
+##  MSE=0.03496675 even bigger than single tree.
 importance(bag.hw)
 varImpPlot(bag.hw)
 ```
 
 ```{r}
 ### Tuning
+library(caret)
 fitControl=trainControl(method="cv",
                         number=10,)
 
@@ -72,8 +75,6 @@ fitControl=trainControl(method="cv",
 
 ```{r}
 #### random forest
-library(caret)
-
 #### Tuning to find best mtry for Random Forest
 set.seed(1)
 tuning.rf.hw=train(Estimate~.,
@@ -100,7 +101,7 @@ yhat.bag=predict(rf.hw,newdata=hw[-train ,])
 plot(yhat.bag,hw.test)
 abline(0,1)
 mean((yhat.bag - hw.test)^2)
-## MSE=0.0354102
+## MSE=0.0345056
 importance(rf.hw)
 varImpPlot(rf.hw)
 
@@ -137,30 +138,40 @@ plot(tuning.boost.hw)
 set.seed(1)
 boost.hw=gbm(Estimate~.,data = hw[train,],distribution = "gaussian",n.trees=200,interaction.depth = 5)
 summary(boost.hw)
-par(mfrow =c(1,2) )
+par(mfrow =c(1,3))
 plot( boost.hw ,i="pop100")
 plot( boost.hw,i="Ppoverty")
+plot(boost.hw,i="max.temp.quantile")
 yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =200)
 mean((yhat.boost - hw.test)^2)
 
-## MSE=0.03561749
+## MSE=0.03561743
 
 
 ```
+
+
+
+
+
+
+
+
+
+
 
 ```{r}
 #### If response is post.est
 load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
 hw=data.frame(all.hws)
 colnames(hw)[28]<="mean.temp.1"
-
-hw=hw[,-c(1,6,7,20:22,31:33,35)]
+hw$start.date=year(all.hws$start.date)
+hw=hw[,-c(1,7,20:22,31:33,35)]
 ### Single Tree
 set.seed(1) ##generate fixed random numbers
 train = sample (1: nrow (hw), nrow(hw)/2)
 tree.hw = tree(post.estimate~.,hw, subset = train )
 summary (tree.hw)
-## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"          "mean.temp"
 plot(tree.hw)
 text(tree.hw,pretty=0)
 cv.hw =cv.tree(tree.hw)
@@ -168,7 +179,7 @@ plot(cv.hw$size,cv.hw$dev,type='b')
 ## The plot tells us the best would be 4 node.
 
 ## Continue using Prune
-prune.hw =prune.tree(tree.hw,best=4)  ## error
+prune.hw =prune.tree(tree.hw,best=4)
 plot(prune.hw)
 text(prune.hw,pretty =0)
 
@@ -185,12 +196,12 @@ mean((yhat - hw.test)^2)
 #### Bagging
 library(randomForest)
 set.seed(1)
-bag.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=24,importance=TRUE)
+bag.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
 yhat.bag=predict(bag.hw,newdata=hw[-train ,])
 plot(yhat.bag,hw.test)
 abline(0,1)
 mean((yhat.bag - hw.test)^2)
-## MSE=0.000927588 does't change a lot
+## MSE=0.0009133906 does't change a lot
 importance(bag.hw)
 varImpPlot(bag.hw)
 ```
@@ -210,16 +221,16 @@ tuning.rf.hw=train(post.estimate~.,
                    tuneLength=5)
 tuning.rf.hw
 plot(tuning.rf.hw)
-#### the optimal mtry is 2.
+#### the optimal mtry is 25.
 
 
 set.seed(1)
-rf.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=2,importance=TRUE)
+rf.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
 yhat.bag=predict(rf.hw,newdata=hw[-train ,])
 plot(yhat.bag,hw.test)
 abline(0,1)
 mean((yhat.bag - hw.test)^2)
-## MSE=0.03599363 doesn't change a lot
+## MSE=0.0009133906 doesn't change a lot
 importance(rf.hw)
 varImpPlot(rf.hw)
 
@@ -228,11 +239,11 @@ varImpPlot(rf.hw)
 ```{r}
 ### boosting
 #### Tuning to find best mtry for Boostingt
-gbmgrid=expand.grid(.interaction.depth = 7,
-                    .n.trees = c(200,250),
+gbmgrid=expand.grid(.interaction.depth =seq(3,7,by=2),
+                    .n.trees = c(200,250,300),
                     .shrinkage =0.01,
                     .n.minobsinnode=10)
-### shrinkage=0.1 is too bad, the optimal depth is 7 after testing several combinations
+### shrinkage=0.1 is too bad, the optimal depth is 7 and n.trees=300 after testing several combinations
 
 set.seed(1)
 tuning.boost.hw=train(post.estimate~.,data=hw[train,],
@@ -245,15 +256,15 @@ plot(tuning.boost.hw)
 
 
 set.seed(1)
-boost.hw=gbm(post.estimate~.,data = hw[train,],distribution = "gaussian",n.trees=250,interaction.depth = 7)
+boost.hw=gbm(post.estimate~.,data = hw[train,],distribution = "gaussian",n.trees=300,interaction.depth = 7)
 summary(boost.hw)
 par(mfrow =c(1,2))
 plot( boost.hw ,i="mean.temp.quantile")
 plot( boost.hw,i="start.doy")
-yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =250)
+yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =300)
 mean((yhat.boost - hw.test)^2)
 
-## MSE=0.03650557
+## MSE=0.0009912703
 
 
 ```
