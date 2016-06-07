@@ -33,7 +33,7 @@ library(gbm)
 library(caret)
 ```
 
-Load and clean up data
+Load and clean up data:
 
 ```{r}
 load("data-raw/ListOfAllHeatwaves.Rdata")
@@ -45,7 +45,7 @@ hw <- all.hws %>%
 colnames(hw) <- gsub(" ", ".", colnames(hw))
 ```
 
-Create dataframes for fitting models for y1 and y2
+Create dataframes for fitting models for y1 and y2:
 
 ```{r}
 hw <- hw %>%
@@ -107,7 +107,7 @@ ggplot(to_plot, aes(x = estimated_y1, y = true_y1)) +
   xlab("Estimated Y_1") + ylab("True Y_1")
 ```
 
-The mean squared error for this model was `r mean(to_plot$estimated_y1 - to_plot$true_y1)^2`.
+The mean squared error for this model was `r mean((to_plot$estimated_y1 - to_plot$true_y1)^2)`.
 
 Fit a bagging model:
 
