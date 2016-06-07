@@ -29,7 +29,7 @@ hw=hw[,-c(1,7,20,22,31:35)] ##Since Regression Tree only allows maximum 32 facto
 ### Single Tree
 set.seed(1) ##generate fixed random numbers
 train = sample (1: nrow (hw), nrow(hw)/2)
-tree.hw = tree(Estimate~.,hw, subset = train )
+tree.hw = tree(Estimate~.,hw, subset = train)
 summary (tree.hw)
 ## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"  "start.date"     
 plot(tree.hw)
