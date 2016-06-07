@@ -342,3 +342,29 @@ mean((yhat.boost - hw.test)^2)
 
 
 ```
+
+```{r}
+### xgboost it has faster implementaitons and it has both linear model solver and tree learning algorithms
+library(xgboost)
+library(readr)
+library(stringr)
+library(caret)
+library(car)
+library(Matrix)
+
+
+df_train=hw[train,]
+df_test=hw[-train,]
+
+df_train=as.matrix(df_train)
+
+as(df_train,"dgCMatrix")
+
+# combine train and test data
+set.seed(1)
+xgb <- xgboost(data = df_train[,-18],label=df_train[,18],
+               nrounds=2,
+               objective = "reg:linear")
+
+```
+
