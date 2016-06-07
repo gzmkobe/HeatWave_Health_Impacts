@@ -56,7 +56,7 @@ for (x in xvar2){
 }
 ```
 
-```{r}
+```{r eval = FALSE}
 pairs(xvar1)
 ```
 
