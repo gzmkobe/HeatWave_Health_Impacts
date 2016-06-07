@@ -9,111 +9,182 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-##load data
-load("data-raw/ListOfAllHeatwaves.Rdata")
+Load required libraries
+
+```{r message = FALSE, warning = FALSE}
+# Data wrangling
 library(lubridate)
-hw=data.frame(all.hws)
-colnames(hw)[28]<="mean.temp.1"
-hw$start.date=year(all.hws$start.date)
-##################################################
-################################ Regression Tree
-library(MASS)
+library(dplyr)
+
+# For plotting
+library(ggplot2)
+
+# For regression tree
+# library(MASS)
 library(tree)
 
+# For bagging and random forest models
+library(randomForest)
 
-### !!! data hw doesn't include post.estimate but has Estimate
-hw=hw[,-c(1,7,20,22,31:35)] ##Since Regression Tree only allows maximum 32 factors, also, there are some useless columns 
+### For the boosting model
+library(gbm)
 
-########################### If reponse is Estimate
-### Single Tree
-set.seed(1) ##generate fixed random numbers
-train = sample (1: nrow (hw), nrow(hw)/2)
-tree.hw = tree(Estimate~.,hw, subset = train )
-summary (tree.hw)
-## Variables actually used in tree construction:"max.temp.quantile" "Ppoverty"  "start.date"     
-plot(tree.hw)
-text(tree.hw,pretty=0)
-cv.hw =cv.tree(tree.hw)
-plot(cv.hw$size,cv.hw$dev,type='b')
-## The plot tells us the best would be 4 node.
-
-
-## disregard pruned tree, but using unpruned tree
-yhat=predict(tree.hw,newdata=hw[-train,])
-hw.test=hw[-train ,'Estimate']
-plot(yhat,hw.test)
-abline(0 ,1)
-mean((yhat - hw.test)^2)
-## MSE=0.03445412
+### For tuning models
+library(caret)
 ```
 
+Load and clean up data
+
 ```{r}
-#### Bagging
-library(randomForest)
+load("data-raw/ListOfAllHeatwaves.Rdata")
+fix_colnames <- which(colnames(all.hws) == "mean.temp")
+colnames(all.hws)[fix_colnames[2]] <- "mean.temp.1"
+
+hw <- all.hws %>%
+  mutate(start.year = year(start.date))
+colnames(hw) <- gsub(" ", ".", colnames(hw))
+```
+
+Create dataframes for fitting models for y1 and y2
+
+```{r}
+hw <- hw %>%
+  select(-hw.number, -start.date, -end.date, -id, -Std..Error, 
+         -city, -Posterior.Estimate, -Posterior.SE, -post.se)
+
+to_fit_y1 <- hw %>%
+  select(-post.estimate)
+
+to_fit_y2 <- hw %>%
+  select(-Estimate)
+
+# Create a random subset of heat waves to use to train models
+set.seed(1001) ##generate fixed random numbers
+hw_indices <- 1:nrow(hw)
+
+train <- sort(sample(hw_indices, length(hw_indices) / 2))
+head(train)
+
+test <- hw_indices[-train]
+head(test)
+```
+
+Fit a regression tree for $Y_1$:
+
+```{r}
+tree.hw <- tree(Estimate ~ ., data = to_fit_y1, subset = train)
+summary(tree.hw)
+```
+
+The variables included in this model are: `r paste(summary(tree.hw)$used, collapse = ", ")`. Here is a plot of the final tree for this model:
+
+```{r}
+plot(tree.hw)
+text(tree.hw, pretty = 0)
+```
+
+Here are the results of using cross-validation to decide whether (and how much) to prune the tree:
+
+```{r}
+cv.hw <- cv.tree(tree.hw)
+plot(cv.hw$size, cv.hw$dev, type='b')
+```
+
+Based on this analysis, the best tree size would be `r cv.hw$size[1]` nodes.
+
+Using the unpruned tree, here are predictions on the holdout, training dataset:
+
+```{r fig.width = 6, fig.height = 5}
+yhat <- predict(tree.hw, newdata = to_fit_y1[test, ])
+
+to_plot <- data.frame(estimated_y1 = yhat,
+                      true_y1 = to_fit_y1[test, "Estimate"])
+ggplot(to_plot, aes(x = estimated_y1, y = true_y1)) + 
+  geom_point(alpha = 0.2) + 
+  xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  geom_abline(intercept = 0, slope = 1) + 
+  xlab("Estimated Y_1") + ylab("True Y_1")
+```
+
+The mean squared error for this model was `r mean(to_plot$estimated_y1 - to_plot$true_y1)^2`.
+
+Fit a bagging model:
+
+```{r fig.width = 6, fig.height = 5}
 set.seed(1)
-bag.hw=randomForest(Estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
-yhat.bag=predict(bag.hw,newdata=hw[-train ,])
-plot(yhat.bag,hw.test)
-abline(0,1)
-mean((yhat.bag - hw.test)^2)
-##  MSE=0.03496675 even bigger than single tree.
+bag.hw <- randomForest(Estimate ~ ., 
+                       data = to_fit_y1, subset = train,
+                       mtry = ncol(to_fit_y1) - 1, importance = TRUE)
+
+yhat.bag <- predict(bag.hw, newdata = to_fit_y1[test, ])
+
+to_plot <- data.frame(estimated_y1 = yhat.bag,
+                      true_y1 = to_fit_y1[test, "Estimate"])
+ggplot(to_plot, aes(x = estimated_y1, y = true_y1)) + 
+  geom_point(alpha = 0.2) + 
+  xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  geom_abline(intercept = 0, slope = 1) + 
+  xlab("Estimated Y_1") + ylab("True Y_1")
+```
+
+The mean squared error for this model was `r mean(to_plot$estimated_y1 - to_plot$true_y1)^2`.
+
+Here is more on the variable importance for this model:
+
+```{r}
 importance(bag.hw)
 varImpPlot(bag.hw)
 ```
 
+Fitting a random forest model, with tuning:
+
 ```{r}
-### Tuning
-library(caret)
-fitControl=trainControl(method="cv",
-                        number=10,)
+# Use 10-fold cross validation for tuning to find the best `mtry`
+fitControl <- trainControl(method = "cv", number = 10)
 
-
-            
-
+set.seed(1)
+tuning.rf.hw <- train(Estimate ~ ., data = to_fit_y1, subset = train,
+                   method = "rf", trControl = fitControl, ntree = 10,
+                   importance = TRUE, metric="RMSE",
+                   maximize = FALSE, tuneLength=5)
 ```
 
+Here are the results from that tuning process:
+
 ```{r}
-#### random forest
-#### Tuning to find best mtry for Random Forest
-set.seed(1)
-tuning.rf.hw=train(Estimate~.,
-                   data=hw,subset=train,
-                   method = "rf",
-                   trControl = fitControl,
-                   ntree = 10,
-                   importance = TRUE,
-                   metric="RMSE",
-                   maximize = FALSE,
-                   tuneLength=5)
 tuning.rf.hw
 plot(tuning.rf.hw)
-#### the optimal mtry is 2.
-
-
-
-set.seed(1)
-rf.hw=randomForest(Estimate~.,
-                   data=hw,subset=train,
-                   mtry=2,
-                   importance=TRUE)
-yhat.bag=predict(rf.hw,newdata=hw[-train ,])
-plot(yhat.bag,hw.test)
-abline(0,1)
-mean((yhat.bag - hw.test)^2)
-## MSE=0.0345056
-importance(rf.hw)
-varImpPlot(rf.hw)
-
-
-
 ```
 
+Based on this tuning, the best value for `mtry` in the random forest model for this outcome is `r tuning.rf.hw$bestTune`. 
+
+```{r fig.width = 6, fig.height = 5}
+yhat.rf <- predict(tuning.rf.hw$finalModel, newdata = to_fit_y1[test, ])
+
+to_plot <- data.frame(estimated_y1 = yhat.rf,
+                      true_y1 = to_fit_y1[test, "Estimate"])
+ggplot(to_plot, aes(x = estimated_y1, y = true_y1)) + 
+  geom_point(alpha = 0.2) + 
+  xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  geom_abline(intercept = 0, slope = 1) + 
+  xlab("Estimated Y_1") + ylab("True Y_1")
+```
+
+The mean squared error for this model was `r mean(to_plot$estimated_y1 - to_plot$true_y1)^2`.
+
+Here are the variable importance plots: 
+
+```{r fig.width = 8, fig.height = 8}
+importance(tuning.rf.hw$finalModel)
+varImpPlot(tuning.rf.hw$finalModel)
+```
+
+Fit a boosting model:
 
 ```{r}
-### boosting
-library(gbm)
-
 #### Tuning to find best mtry for Boostingt
 gbmgrid=expand.grid(.interaction.depth = seq(1, 7, by = 2),
                     .n.trees = seq(200,300,by = 50),
@@ -143,6 +214,7 @@ plot( boost.hw ,i="pop100")
 plot( boost.hw,i="Ppoverty")
 plot(boost.hw,i="max.temp.quantile")
 yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =200)
+hw.test <- hw[-train, "Estimate"]
 mean((yhat.boost - hw.test)^2)
 
 ## MSE=0.03561743
@@ -162,7 +234,7 @@ mean((yhat.boost - hw.test)^2)
 
 ```{r}
 #### If response is post.est
-load("F:/Study/study/Summer Epidemiology Research/ListOfAllHeatwaves.Rdata")
+load("data-raw/ListOfAllHeatwaves.Rdata")
 hw=data.frame(all.hws)
 colnames(hw)[28]<="mean.temp.1"
 hw$start.date=year(all.hws$start.date)
