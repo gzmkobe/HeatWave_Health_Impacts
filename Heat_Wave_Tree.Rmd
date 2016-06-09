@@ -32,6 +32,10 @@ library(gbm)
 
 ### For tuning models
 library(caret)
+
+
+### Fo xgboost model
+library(xgboost)
 ```
 
 
@@ -42,7 +46,7 @@ load("data-raw/ListOfAllHeatwaves.Rdata")
 fix_colnames <- which(colnames(all.hws) == "mean.temp")
 colnames(all.hws)[fix_colnames[2]] <- "mean.temp.1"
 
-hw <- all.hws %>%
+hw <- all.hws %>% 
   mutate(start.year = year(start.date))
 colnames(hw) <- gsub(" ", ".", colnames(hw))
 ```
@@ -184,187 +188,93 @@ importance(tuning.rf.hw$finalModel)
 varImpPlot(tuning.rf.hw$finalModel)
 ```
 
-Fit a boosting model:
+Fit a boosting model, with tuning
 
 ```{r}
-#### Tuning to find best mtry for Boostingt
-gbmgrid=expand.grid(.interaction.depth = seq(1, 7, by = 2),
-                    .n.trees = seq(200,300,by = 50),
-                    .shrinkage =0.01,
-                    .n.minobsinnode=10)
+#### Tuning to find best mtry for Boosting
+gbmgrid <- expand.grid(.interaction.depth = seq(1, 7, by = 2),
+                    .n.trees = seq(200, 300, by = 50),
+                    .shrinkage = 0.01,
+                    .n.minobsinnode = 10)
 set.seed(1)
-## I've already tested shrinkage=0.1, which is not good as shrinkage=0.01, to speed the process, I cut 0.1 off.
 
 
+tuning.boost.hw <- train(Estimate~., data=to_fit_y1, subset = train,
+                      method = "gbm",
+                      tuneGrid = gbmgrid,
+                      trControl = fitControl,
+                      verbose = FALSE)
+```
 
-tuning.boost.hw=train(Estimate~.,data=hw[train,],
-                      method="gbm",
-                      tuneGrid=gbmgrid,
-                      trControl=fitControl,
-                      verbose=FALSE)
+Here are the results from that tuning process:
+
+```{r}
 tuning.boost.hw
 plot(tuning.boost.hw)
-## The plot has the optimal value at interaction.depth=5 and n.trees=200. 
+```
 
+Based on this tuning, the best value for `interaction.depth` is `rtuning.boost.hw$bestTune[,2]` and for `n.trees` is `r tuning.boost.hw$bestTune[,1]`. 
 
-
-set.seed(1)
-boost.hw=gbm(Estimate~.,data = hw[train,],distribution = "gaussian",n.trees=200,interaction.depth = 5)
+```{r}
+boost.hw <- gbm(Estimate~., data = to_fit_y1[train,],
+                distribution = "gaussian",
+                n.trees = tuning.boost.hw$bestTune[,1],
+                interaction.depth = tuning.boost.hw$bestTune[,2])
 summary(boost.hw)
-par(mfrow =c(1,3))
-plot( boost.hw ,i="pop100")
-plot( boost.hw,i="Ppoverty")
-plot(boost.hw,i="max.temp.quantile")
-yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =200)
-hw.test <- hw[-train, "Estimate"]
-mean((yhat.boost - hw.test)^2)
 
-## MSE=0.03561743
+yhat.boost <- predict(boost.hw, newdata = to_fit_y1[test,], n.trees =tuning.boost.hw$bestTune[,1])
+hw.test <- to_fit_y1[-train, "Estimate"]
 
+
+to_plot <- data.frame(estimated_y1 = yhat.boost,
+                      true_y1 = to_fit_y1[test, "Estimate"])
+ggplot(to_plot, aes(x = estimated_y1, y = true_y1)) + 
+  geom_point(alpha = 0.2) + 
+  xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  geom_abline(intercept = 0, slope = 1) + 
+  xlab("Estimated Y_1") + ylab("True Y_1")
 
 ```
 
+The mean squared error for this model was `r mean(to_plot$estimated_y1 - to_plot$true_y1)^2`.
 
 
 
-
-
-
-
-
-
-
+Fit a xgboost model.
 ```{r}
-#### If response is post.est
-load("data-raw/ListOfAllHeatwaves.Rdata")
-hw=data.frame(all.hws)
-colnames(hw)[28]<="mean.temp.1"
-hw$start.date=year(all.hws$start.date)
-hw=hw[,-c(1,7,20:22,31:33,35)]
-### Single Tree
-set.seed(1) ##generate fixed random numbers
-train = sample (1: nrow (hw), nrow(hw)/2)
-tree.hw = tree(post.estimate~.,hw, subset = train )
-summary (tree.hw)
-plot(tree.hw)
-text(tree.hw,pretty=0)
-cv.hw =cv.tree(tree.hw)
-plot(cv.hw$size,cv.hw$dev,type='b')
-## The plot tells us the best would be 4 node.
+df_train <- to_fit_y1[train,]
 
-## Continue using Prune
-prune.hw =prune.tree(tree.hw,best=4)
-plot(prune.hw)
-text(prune.hw,pretty =0)
+df_test <- to_fit_y1[-train,]
 
-## disregard pruned tree, but using unpruned tree
-yhat=predict(tree.hw,newdata=hw[-train,])
-hw.test=hw[-train ,'post.estimate']
-plot(yhat,hw.test)
-abline(0 ,1)
-mean((yhat - hw.test)^2)
-## MSE=0.0009294525 Really lower!
+data <- as.matrix(df_train[,-17])
+label=df_train[,17]
 ```
 
+Tuning
 ```{r}
-#### Bagging
-library(randomForest)
-set.seed(1)
-bag.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
-yhat.bag=predict(bag.hw,newdata=hw[-train ,])
-plot(yhat.bag,hw.test)
-abline(0,1)
-mean((yhat.bag - hw.test)^2)
-## MSE=0.0009133906 does't change a lot
-importance(bag.hw)
-varImpPlot(bag.hw)
+xgb.grid <- expand.grid(nrounds = 10,
+                        eta = 0.1,  ### change c(0.01,0.05,0.1) to 0.1
+                        max_depth = c(2,4,6,8,10,14),
+                        gamma = 1,
+                        colsample_bytree = 0.5,
+                        min_child_weight=1
+                        )
+set.seed(45)
+xgb_tune <-train(Estimate~.,
+                 data=df_train,
+                 method="xgbTree",
+                 trControl=fitControl,
+                 tuneGrid=xgb.grid,
+                 verbose=T,
+                 nthread =3)
+xgb_tune
 ```
 
-```{r}
-#### random forest
-#### Tuning to find best mtry for Random Forest
-set.seed(1)
-tuning.rf.hw=train(post.estimate~.,
-                   data=hw,subset=train,
-                   method = "rf",
-                   trControl = fitControl,
-                   ntree = 10,
-                   importance = TRUE,
-                   metric="RMSE",
-                   maximize = FALSE,
-                   tuneLength=5)
-tuning.rf.hw
-plot(tuning.rf.hw)
-#### the optimal mtry is 25.
+Based on this tuning, the best value for `max_depth` is `r xgb_tune$bestTune[,1]` and for `shrinkage` is `r xgb_tune$bestTune[,2]`. 
 
 
-set.seed(1)
-rf.hw=randomForest(post.estimate~.,data=hw,subset=train,mtry=25,importance=TRUE)
-yhat.bag=predict(rf.hw,newdata=hw[-train ,])
-plot(yhat.bag,hw.test)
-abline(0,1)
-mean((yhat.bag - hw.test)^2)
-## MSE=0.0009133906 doesn't change a lot
-importance(rf.hw)
-varImpPlot(rf.hw)
-
-```
-
-```{r}
-### boosting
-#### Tuning to find best mtry for Boostingt
-gbmgrid=expand.grid(.interaction.depth =seq(3,7,by=2),
-                    .n.trees = c(200,250,300),
-                    .shrinkage =0.01,
-                    .n.minobsinnode=10)
-### shrinkage=0.1 is too bad, the optimal depth is 7 and n.trees=300 after testing several combinations
-
-set.seed(1)
-tuning.boost.hw=train(post.estimate~.,data=hw[train,],
-                      method="gbm",
-                      tuneGrid=gbmgrid,
-                      trControl=fitControl,
-                      verbose=FALSE)
-tuning.boost.hw
-plot(tuning.boost.hw)
 
 
-set.seed(1)
-boost.hw=gbm(post.estimate~.,data = hw[train,],distribution = "gaussian",n.trees=300,interaction.depth = 7)
-summary(boost.hw)
-par(mfrow =c(1,2))
-plot( boost.hw ,i="mean.temp.quantile")
-plot( boost.hw,i="start.doy")
-yhat.boost = predict(boost.hw, newdata = hw[-train ,],n.trees =300)
-mean((yhat.boost - hw.test)^2)
 
-## MSE=0.0009912703
-
-
-```
-
-```{r}
-### xgboost it has faster implementaitons and it has both linear model solver and tree learning algorithms
-library(xgboost)
-library(readr)
-library(stringr)
-library(caret)
-library(car)
-library(Matrix)
-
-
-df_train=hw[train,]
-df_test=hw[-train,]
-
-df_train=as.matrix(df_train)
-
-as(df_train,"dgCMatrix")
-
-# combine train and test data
-set.seed(1)
-xgb <- xgboost(data = df_train[,-18],label=df_train[,18],
-               nrounds=2,
-               objective = "reg:linear")
-
-```
 
