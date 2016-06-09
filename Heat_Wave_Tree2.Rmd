@@ -94,7 +94,7 @@ cv.hw <- cv.tree(tree.hw)
 plot(cv.hw$size, cv.hw$dev, type='b')
 ```
 
-Based on this analysis, the best tree size would be `r cv.hw$size[1]` nodes.
+Based on this analysis, the best tree size would be `r cv.hw$size[which.min(cv.hw$dev)]` nodes.
 
 Using the unpruned tree, here are predictions on the holdout, training dataset:
 
