@@ -15,6 +15,8 @@ load("data-raw/ListOfAllHeatwaves.Rdata")
 
 
 library(lubridate)   ## consider start.date as a predictive variable but we need to change its type into numeric as year
+library(caret)
+
 hw=data.frame(all.hws)
 colnames(hw)[28]<="mean.temp.1"   
 hw$start.date=year(all.hws$start.date)
@@ -95,6 +97,9 @@ nnet.fit <- train(Estimate ~., data = train_,
 nnet.fit
 nnet.predict <- predict(nnet.fit, newdata = test)
 nnet.rmse <- sqrt(mean((nnet.predict - test$Estimate)^2)) 
+
+nnet.rmse
+
 ```
 
 
