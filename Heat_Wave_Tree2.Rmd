@@ -73,7 +73,7 @@ test <- hw_indices[-train]
 head(test)
 ```
 
-Fit a regression tree for $Y_1$:
+Fit a regression tree for $Y_2$:
 
 ```{r}
 tree.hw <- tree(post.estimate ~ ., data = to_fit_y2, subset = train)
@@ -96,6 +96,7 @@ plot(cv.hw$size, cv.hw$dev, type='b')
 
 Based on this analysis, the best tree size would be `r cv.hw$size[which.min(cv.hw$dev)]` nodes.
 
+
 Using the unpruned tree, here are predictions on the holdout, training dataset:
 
 ```{r fig.width = 6, fig.height = 5}
@@ -108,7 +109,7 @@ ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) +
   xlim(range(to_plot)) + ylim(range(to_plot)) + 
   theme_minimal() + 
   geom_abline(intercept = 0, slope = 1) + 
-  xlab("post.estimated Y_1") + ylab("True Y_1")
+  xlab("post.estimated Y_2") + ylab("True Y_2")
 ```
 
 The mean squared error for this model was `r mean((to_plot$post.estimated_y2 - to_plot$true_y2)^2)`.
@@ -130,7 +131,7 @@ ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) +
   xlim(range(to_plot)) + ylim(range(to_plot)) + 
   theme_minimal() + 
   geom_abline(intercept = 0, slope = 1) + 
-  xlab("post.estimated Y_1") + ylab("True Y_1")
+  xlab("post.estimated Y_2") + ylab("True Y_2")
 ```
 
 The mean squared error for this model was `r mean(to_plot$post.estimated_y2 - to_plot$true_y2)^2`.
@@ -174,7 +175,7 @@ ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) +
   xlim(range(to_plot)) + ylim(range(to_plot)) + 
   theme_minimal() + 
   geom_abline(intercept = 0, slope = 1) + 
-  xlab("post.estimated Y_1") + ylab("True Y_1")
+  xlab("post.estimated Y_2") + ylab("True Y_2")
 ```
 
 The mean squared error for this model was `r mean(to_plot$post.estimated_y2 - to_plot$true_y2)^2`.
@@ -231,7 +232,7 @@ ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) +
   xlim(range(to_plot)) + ylim(range(to_plot)) + 
   theme_minimal() + 
   geom_abline(intercept = 0, slope = 1) + 
-  xlab("post.estimated Y_1") + ylab("True Y_1")
+  xlab("post.estimated Y_2") + ylab("True Y_2")
 
 ```
 
