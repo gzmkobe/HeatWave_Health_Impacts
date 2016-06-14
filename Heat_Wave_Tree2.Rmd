@@ -269,6 +269,24 @@ xgb_tune <-train(post.estimate~.,
 xgb_tune
 ```
 
+```{r}
+yhat.xgboost <- predict(xgb_tune$finalModel, 
+                        newdata = as.matrix(to_fit_y2[test,]))
+
+hw.test <- to_fit_y2[-train, "post.estimate"]
+
+
+to_plot <- data.frame(post.estimated_y2 = yhat.xgboost,
+                      true_y2 = to_fit_y2[test, "post.estimate"])
+ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) + 
+  geom_point(alpha = 0.2) + 
+  # xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  # geom_abline(intercept = 0, slope = 1) + 
+  xlab("post.estimated Y_1") + ylab("True Y_1")
+```
+
+
 Based on this tuning, the best value for `max_depth` is `r xgb_tune$bestTune[,1]` and for `shrinkage` is `r xgb_tune$bestTune[,2]`. 
 
 
