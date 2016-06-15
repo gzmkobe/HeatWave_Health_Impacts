@@ -1,5 +1,13 @@
-# HeatWave_Health_Impacts
+---
+title: "Predicting the health impacts of heat waves"
+author: "Zhiming Guo and Brooke Anderson"
+date: "June 14, 2016"
+output:   md_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 # Overview
 
 We are trying to establish a prediction model to estimate "Estimate" and "post Estimate", which are referred to the impact of a specific heatwave on humanbeings. We use
@@ -41,6 +49,8 @@ For neuralnetwork, we have mse for glm and neuralnet models which are pretty col
 The original dataset has two columes with a same name, so we change one of them to the other name to let R recognize. 
 
 ```{r}
+library(dplyr)
+library(lubridate)
 load("data-raw/ListOfAllHeatwaves.Rdata")
 fix_colnames <- which(colnames(all.hws) == "mean.temp")
 colnames(all.hws)[fix_colnames[2]] <- "mean.temp.1"
@@ -170,7 +180,7 @@ library(nnet)
 
 First, we want to make sure there is no missing data, becasue package "neuralnet" can't deal with dataset with missings. After checking, we know there is no missing data and we can definetely run the package.
 ```{r}
-apply(data,2,function(x) sum(is.na(x))
+apply(data,2,function(x) sum(is.na(x)))
 ```
 Then, a data preprocessing is required. It is good practice to normalize your data before training a neural network.
 ```{r}
