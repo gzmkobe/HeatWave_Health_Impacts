@@ -1,0 +1,173 @@
+---
+title: "PredictingWithBoostingModel"
+author: "Zhiming Guo and Brooke Anderson"
+date: "August 7, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message = FALSE, warning = FALSE}
+# Load required libraries
+
+# Data wrangling
+library(lubridate)
+library(dplyr)
+
+# For plotting
+library(ggplot2)
+
+# For bagging and random forest models
+library(randomForest)
+### For tuning models
+library(caret)
+
+```
+
+## Data and Methods
+
+```{r}
+# Load and clean up data:
+load("data-raw/ListOfAllHeatwaves.Rdata")
+fix_colnames <- which(colnames(all.hws) == "mean.temp")
+colnames(all.hws)[fix_colnames[2]] <- "mean.temp.1"
+
+hw <- all.hws %>% 
+  mutate(start.year = year(start.date))
+colnames(hw) <- gsub(" ", ".", colnames(hw))
+```
+
+The training data used to develop the predictive model were from `r length(unique(hw$city))` US communities over the years 1987-2005. This training dataset included all heatwaves in these communities over this time period, a total of `r prettyNum(nrow(hw), big.mark = ",")` heatwaves.
+
+```{r}
+training_data <- hw %>%
+  dplyr::select(mean.temp, max.temp, min.temp, length, start.doy, start.month,
+                days.above.80, days.above.85, days.above.90, days.above.95,
+                days.above.99th, days.above.99.5th, first.in.season, 
+                mean.temp.quantile, max.temp.quantile, min.temp.quantile,
+                mean.temp.1, mean.summer.temp, pop100, pop.density,
+                post.estimate)
+```
+
+
+Fitting a random forest model, with tuning:
+
+```{r eval = FALSE}
+# Use 10-fold cross validation for tuning to find the best `mtry`
+fitControl <- trainControl(method = "cv", number = 10)
+
+set.seed(1)
+tuning.rf.hw <- train(post.estimate ~ ., data = training_data, 
+                   method = "rf", trControl = fitControl, ntree = 100,
+                   importance = TRUE, metric = "RMSE",
+                   maximize = FALSE, tuneLength = 5)
+save(tuning.rf.hw, file = "tuning.rf.hw.RData")
+rf_mod <- tuning.rf.hw$finalModel
+save(rf_mod, file = "rf_mod.RData")
+```
+
+```{r}
+load("tuning.rf.hw.RData")
+load("rf_mod.RData")
+```
+
+Here are the results from that tuning process:
+
+```{r}
+tuning.rf.hw
+plot(tuning.rf.hw)
+```
+
+Based on this tuning, the best value for `mtry` in the random forest model for this outcome is `r tuning.rf.hw$bestTune`. (BA: Note-- in my revised version, I'm using the training data to show performance-- estimated RMSE, etc., are going to be more accurate from the cross-validation, because here we're showing how well the model works on the data we trained it on, so it's over-optimistic.)
+
+```{r fig.width = 6, fig.height = 5}
+yhat.rf <- predict(tuning.rf.hw$finalModel, newdata = training_data)
+
+to_plot <- data.frame(post.estimated_y2 = yhat.rf,
+                      true_y2 = training_data[ , "post.estimate"])
+ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) + 
+  geom_point(alpha = 0.2) + 
+  xlim(range(to_plot)) + ylim(range(to_plot)) + 
+  theme_minimal() + 
+  geom_abline(intercept = 0, slope = 1) + 
+  xlab("post.estimated Y_2") + ylab("True Y_2")
+```
+
+The mean squared error for this model was `r mean((to_plot$post.estimated_y2 - to_plot$true_y2)^2)`.
+
+Here are the variable importance plots: 
+
+```{r fig.width = 8, fig.height = 8}
+importance(tuning.rf.hw$finalModel)
+varImpPlot(tuning.rf.hw$finalModel)
+```
+
+Determine average daily mortality for each community: 
+
+```{r eval = FALSE}
+cities <- gsub(".rds", "", list.files("~/tmp/NMMAPS"))
+
+calc_mort <- function(city){
+  print(city)
+  city_df <- readRDS(paste0("~/tmp/NMMAPS/", city, ".rds")) %>%
+    dplyr::mutate(death = death + accident) %>%
+    dplyr::select(date, death) %>% 
+    dplyr::group_by(date) %>%
+    dplyr::summarize(death = sum(death)) %>%
+    dplyr::ungroup() %>%
+    dplyr::summarize(mean_death = mean(death))
+  return(city_df$mean_death)
+}
+
+base_deaths <- data.frame(city = cities,
+                          base_mort = sapply(cities, calc_mort),
+                          stringsAsFactors = FALSE)
+save(base_deaths, file = "base_deaths.RData")
+```
+
+
+Here is the code to predict from this model: 
+
+```{r}
+proj_hws <- read.table("projected_heatwaves.txt", header = TRUE, as.is = TRUE)
+proj_pops <- read.csv("projected_populations.csv", header = TRUE, as.is = TRUE)
+land_area <- read.csv("land_area.csv", header = TRUE, as.is = TRUE)
+load("base_deaths.RData")
+
+proj_pops <- group_by(proj_pops, city) %>%
+        summarise(pop100 = sum(SSP5)) %>%
+        left_join(land_area, by = "city") %>%
+        mutate(pop.density = pop100 / arealand) %>%
+        dplyr::select(-arealand) %>%
+  mutate(city = as.character(city))
+proj_hws <- left_join(proj_hws, proj_pops, by = "city") %>%
+  left_join(base_deaths, by = "city")
+
+# Get predicted log RR for all of the heatwaves
+projs_rf <- predict(rf_mod, newdata = proj_hws)
+hist(exp(projs_rf))
+
+hw_length <- proj_hws$length
+base_mort <- proj_hws$base_mort
+
+hw_length[1] * base_mort[1] # expected mortality during first HW without HW
+exp(projs_rf[1]) - 1 # Percent increase from first heatwave
+hw_length[1] * base_mort[1] * (exp(projs_rf[1]) - 1) # Expected excess from HW1
+
+## Note-- for all of these, AF is only attributable fraction of deaths on 
+## heat wave days
+exp_excess <- hw_length * base_mort * (exp(projs_rf) - 1)
+sum(exp_excess)
+sum(exp_excess) / sum(base_mort * hw_length) # AF
+
+exp_excess <- hw_length  * (exp(projs_rf) - 1) # Don't need base mort for AF
+sum(exp_excess)
+sum(exp_excess) / sum(hw_length) # AF
+
+AF <- 1 - exp(-projs_rf)
+exp_excess2 <- AF * hw_length * base_mort
+sum(exp_excess2)
+```
+
