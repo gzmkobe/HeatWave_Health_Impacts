@@ -121,9 +121,18 @@ calc_mort <- function(city){
   return(city_df$mean_death)
 }
 
+county_pops <- read.csv("nmmaps_counties.csv", as.is = TRUE) %>%
+  select(city, pop) %>%
+  group_by(city) %>%
+  summarize(pop = sum(pop))
+
 base_deaths <- data.frame(city = cities,
                           base_mort = sapply(cities, calc_mort),
                           stringsAsFactors = FALSE)
+base_deaths <- base_deaths %>%
+  left_join(county_pops, by = "city") %>%
+  mutate(mort_rate = base_mort / pop)
+
 save(base_deaths, file = "base_deaths.RData")
 ```
 
@@ -150,7 +159,7 @@ projs_rf <- predict(rf_mod, newdata = proj_hws)
 hist(exp(projs_rf))
 
 hw_length <- proj_hws$length
-base_mort <- proj_hws$base_mort
+base_mort <- proj_hws$pop * proj_hws$mort_rate
 
 hw_length[1] * base_mort[1] # expected mortality during first HW without HW
 exp(projs_rf[1]) - 1 # Percent increase from first heatwave
