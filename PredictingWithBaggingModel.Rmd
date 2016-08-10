@@ -159,7 +159,7 @@ projs_rf <- predict(rf_mod, newdata = proj_hws)
 hist(exp(projs_rf))
 
 hw_length <- proj_hws$length
-base_mort <- proj_hws$pop * proj_hws$mort_rate
+base_mort <- proj_hws$pop100 * proj_hws$mort_rate
 
 hw_length[1] * base_mort[1] # expected mortality during first HW without HW
 exp(projs_rf[1]) - 1 # Percent increase from first heatwave
