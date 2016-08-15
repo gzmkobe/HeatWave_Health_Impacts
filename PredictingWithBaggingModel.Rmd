@@ -73,6 +73,26 @@ load("tuning.rf.hw.RData")
 load("rf_mod.RData")
 ```
 
+Basic model for comparison (always predicts mean log RR as heatwave effect): 
+
+```{r warnings = FALSE}
+fitControl <- trainControl(method = "cv", number = 10)
+basic_mod <- train(post.estimate ~ 1, data = training_data, 
+                   method = "glm", family = "gaussian", 
+                   trControl = fitControl)
+basic_mod
+
+# Basic model coefficients for Fig. 1 histogram
+coef(basic_mod$finalModel)
+exp(coef(basic_mod$finalModel))
+```
+
+```{r}
+min(tuning.rf.hw$results$RMSE)
+basic_mod$results$RMSE
+```
+
+
 Here are the results from that tuning process:
 
 ```{r}
@@ -95,7 +115,7 @@ ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) +
   xlab("post.estimated Y_2") + ylab("True Y_2")
 ```
 
-The mean squared error for this model was `r mean((to_plot$post.estimated_y2 - to_plot$true_y2)^2)`.
+The mean squared error for this model (against the training data, when fit with that data; for OOB estimated RMSE, see the results from cross-validation above) was `r mean((to_plot$post.estimated_y2 - to_plot$true_y2)^2)`.
 
 Here are the variable importance plots: 
 
