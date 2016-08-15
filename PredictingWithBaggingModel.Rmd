@@ -112,7 +112,7 @@ cities <- gsub(".rds", "", list.files("~/tmp/NMMAPS"))
 calc_mort <- function(city){
   print(city)
   city_df <- readRDS(paste0("~/tmp/NMMAPS/", city, ".rds")) %>%
-    dplyr::mutate(death = death + accident) %>%
+    dplyr::mutate(death = alldeath) %>%
     dplyr::select(date, death) %>% 
     dplyr::group_by(date) %>%
     dplyr::summarize(death = sum(death)) %>%
@@ -165,18 +165,7 @@ hw_length[1] * base_mort[1] # expected mortality during first HW without HW
 exp(projs_rf[1]) - 1 # Percent increase from first heatwave
 hw_length[1] * base_mort[1] * (exp(projs_rf[1]) - 1) # Expected excess from HW1
 
-## Note-- for all of these, AF is only attributable fraction of deaths on 
-## heat wave days
-exp_excess <- hw_length * base_mort * (exp(projs_rf) - 1)
+exp_excess <- (exp(projs_rf) - 1) * hw_length * base_mort
 sum(exp_excess)
-sum(exp_excess) / sum(base_mort * hw_length) # AF
-
-exp_excess <- hw_length  * (exp(projs_rf) - 1) # Don't need base mort for AF
-sum(exp_excess)
-sum(exp_excess) / sum(hw_length) # AF
-
-AF <- 1 - exp(-projs_rf)
-exp_excess2 <- AF * hw_length * base_mort
-sum(exp_excess2)
 ```
 
