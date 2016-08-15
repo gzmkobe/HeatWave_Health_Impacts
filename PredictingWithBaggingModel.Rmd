@@ -107,17 +107,29 @@ varImpPlot(tuning.rf.hw$finalModel)
 Determine average daily mortality for each community: 
 
 ```{r eval = FALSE}
+library(futureheatwaves)
+
 cities <- gsub(".rds", "", list.files("~/tmp/NMMAPS"))
 
 calc_mort <- function(city){
   print(city)
+  
   city_df <- readRDS(paste0("~/tmp/NMMAPS/", city, ".rds")) %>%
-    dplyr::mutate(death = alldeath) %>%
-    dplyr::select(date, death) %>% 
     dplyr::group_by(date) %>%
-    dplyr::summarize(death = sum(death)) %>%
-    dplyr::ungroup() %>%
+    dplyr::summarize(death = sum(alldeath), 
+                     tmpd = first(tmpd)) %>%
+    dplyr::ungroup()
+  
+  city_hws <- IDHeatwavesCPPwrapper(threshold = quantile(city_df$tmpd, 0.98,
+                                                         na.rm = TRUE),
+                                    datafr = datafr, numDays = 2) %>%
+    dplyr::select(date, hw)
+  
+  city_df <- city_df %>%
+    dplyr::left_join(city_hws, by = "date") %>%
+    dplyr::filter(hw == 0) %>%
     dplyr::summarize(mean_death = mean(death))
+  
   return(city_df$mean_death)
 }
 
