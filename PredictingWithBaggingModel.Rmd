@@ -73,6 +73,21 @@ load("tuning.rf.hw.RData")
 load("rf_mod.RData")
 ```
 
+See if pre-processing (center, scale, and Box Cox transformation to prevent potential problems from skewness) improve model performance:
+
+```{r eval = FALSE}
+# Use 10-fold cross validation for tuning to find the best `mtry`
+fitControl <- trainControl(method = "cv", number = 10)
+
+set.seed(1)
+tuning.rf.hw.pre <- train(post.estimate ~ ., data = training_data, 
+                   method = "rf", trControl = fitControl, ntree = 100,
+                   importance = TRUE, metric = "RMSE",
+                   maximize = FALSE, tuneLength = 5,
+                   preProcess = c("center", "scale", "BoxCox"))
+save(tuning.rf.hw.pre, file = "tuning.rf.hw.pre.RData")
+```
+
 Basic model for comparison (always predicts mean log RR as heatwave effect): 
 
 ```{r warnings = FALSE}
@@ -87,11 +102,18 @@ coef(basic_mod$finalModel)
 exp(coef(basic_mod$finalModel))
 ```
 
+Here are average values of RMSE in hold-out samples, averaged across the 10 cross-validations, for the best random forest model and for the basic model:
+
 ```{r}
 min(tuning.rf.hw$results$RMSE)
 basic_mod$results$RMSE
 ```
 
+Performance does not improve with pre-processing (Box Cox, centering, and scaling):
+
+```{r}
+min(tuning.rf.hw.pre$results$RMSE)
+```
 
 Here are the results from that tuning process:
 
