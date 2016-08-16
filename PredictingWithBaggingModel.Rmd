@@ -60,7 +60,7 @@ fitControl <- trainControl(method = "cv", number = 10)
 
 set.seed(1)
 tuning.rf.hw <- train(post.estimate ~ ., data = training_data, 
-                   method = "rf", trControl = fitControl, ntree = 100,
+                   method = "rf", trControl = fitControl, ntree = 1000,
                    importance = TRUE, metric = "RMSE",
                    maximize = FALSE, tuneLength = 5)
 save(tuning.rf.hw, file = "tuning.rf.hw.RData")
@@ -90,14 +90,19 @@ save(tuning.rf.hw.pre, file = "tuning.rf.hw.pre.RData")
 
 Basic model for comparison (always predicts mean log RR as heatwave effect): 
 
-```{r warnings = FALSE}
+```{r warnings = FALSE, eval = FALSE}
 fitControl <- trainControl(method = "cv", number = 10)
 basic_mod <- train(post.estimate ~ 1, data = training_data, 
                    method = "glm", family = "gaussian", 
                    trControl = fitControl)
-basic_mod
 
+save(basic_mod, file = "basic_mod.RData")
+```
+
+```{r warnings = FALSE}
 # Basic model coefficients for Fig. 1 histogram
+load("basic_mod.RData")
+basic_mod
 coef(basic_mod$finalModel)
 exp(coef(basic_mod$finalModel))
 ```
@@ -109,9 +114,10 @@ min(tuning.rf.hw$results$RMSE)
 basic_mod$results$RMSE
 ```
 
-Performance does not improve with pre-processing (Box Cox, centering, and scaling):
+Performance does not improve with pre-processing (Box Cox, centering, and scaling [note: I originally checked this using 100-tree random forests for both with and without pre-processing, and still found performance did not improve with pre-processing]):
 
 ```{r}
+load("tuning.rf.hw.pre.RData")
 min(tuning.rf.hw.pre$results$RMSE)
 ```
 
