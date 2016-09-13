@@ -31,8 +31,7 @@ library(caret)
 ```{r}
 # Load and clean up data:
 load("data-raw/ListOfAllHeatwaves.Rdata")
-fix_colnames <- which(colnames(all.hws) == "mean.temp")
-colnames(all.hws)[fix_colnames[2]] <- "mean.temp.1"
+all.hws <- hw_data
 
 hw <- all.hws %>% 
   mutate(start.year = year(start.date))
@@ -134,7 +133,7 @@ Based on this tuning, the best value for `mtry` in the random forest model for t
 yhat.rf <- predict(tuning.rf.hw$finalModel, newdata = training_data)
 
 to_plot <- data.frame(post.estimated_y2 = yhat.rf,
-                      true_y2 = training_data[ , "post.estimate"])
+                      true_y2 = training_data$post.estimate)
 ggplot(to_plot, aes(x = post.estimated_y2, y = true_y2)) + 
   geom_point(alpha = 0.2) + 
   xlim(range(to_plot)) + ylim(range(to_plot)) + 
