@@ -8,7 +8,8 @@ make_obs_hws <- function(city, print_city = TRUE){
     dplyr::select(death, accident, date, agecat, tmpd, dptp, dow) %>%
     dplyr::mutate(death = death + accident)
   
-  threshold <- quantile(datafr$tmpd, 0.98, na.rm = TRUE)
+  threshold <- quantile(datafr$tmpd[datafr$agecat == "under65"],
+                        0.98, na.rm = TRUE)
   df_hws <- datafr %>%
     dplyr::filter(agecat == "under65") %>%
     select(date, tmpd) %>%
