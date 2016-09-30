@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 # Data wrangling
 library(lubridate)
 library(dplyr)
+library(tidyr)
+library(readr)
 
 # For plotting
 library(ggplot2)
@@ -37,6 +39,188 @@ hw <- all.hws %>%
   mutate(start.year = year(start.date))
 colnames(hw) <- gsub(" ", ".", colnames(hw))
 ```
+
+Some exploratory assessment of the training data.
+
+```{r message = FALSE, warning = FALSE}
+library(maps)
+us_map <- map_data("state")
+
+## Here are the distributions of heatwave temperatures (absolute), city averages
+hw %>%
+  select(city, mean.temp, max.temp, min.temp) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ggplot(aes(x = mean_value)) + 
+  geom_histogram(bins = 30) + 
+  facet_wrap(~ key, ncol = 1)
+
+## Here are the cities with, on average, the hottest heatwaves (absolute temp)
+hw %>%
+  select(city, mean.temp, max.temp, min.temp) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ungroup() %>%
+  spread(key, mean_value) %>%
+  arrange(desc(mean.temp)) %>%
+  slice(1:10)
+
+## Here are the cities with, on average, the least hot heatwaves (absolute temp)
+hw %>%
+  select(city, mean.temp, max.temp, min.temp) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ungroup() %>%
+  spread(key, mean_value) %>%
+  arrange(mean.temp) %>%
+  slice(1:10)
+
+## Here is a map of cities' average heatwave temperatures (absolute)
+hw %>%
+  select(city, mean.temp) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(mean.temp)) %>%
+  left_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = mean_value, label = city)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+
+## Here are the distributions of heatwave temperatures (relative), city averages
+hw %>%
+  select(city, mean.temp.quantile, max.temp.quantile, min.temp.quantile) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ggplot(aes(x = mean_value)) + 
+  geom_histogram(bins = 30) + 
+  facet_wrap(~ key, ncol = 1)
+
+## Here are the cities with, on average, the hottest heatwaves (relative temp)
+hw %>%
+  select(city, mean.temp.quantile, max.temp.quantile, min.temp.quantile) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ungroup() %>%
+  spread(key, mean_value) %>%
+  arrange(desc(mean.temp.quantile)) %>%
+  slice(1:10)
+
+## Here are the cities with, on average, the least hot heatwaves (relative temp)
+hw %>%
+  select(city, mean.temp.quantile, max.temp.quantile, min.temp.quantile) %>%
+  gather(key = key, value = value, -city) %>%
+  group_by(city, key) %>%
+  summarize(mean_value = mean(value)) %>%
+  ungroup() %>%
+  spread(key, mean_value) %>%
+  arrange(mean.temp.quantile) %>%
+  slice(1:10)
+
+## Here is a map of cities' average heatwave temperatures (relative)
+hw %>%
+  select(city, mean.temp.quantile) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(mean.temp.quantile)) %>%
+  left_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = mean_value, label = city)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+
+## Here are the distributions of heatwave effects, city averages
+hw %>%
+  select(city, post.estimate) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(post.estimate)) %>%
+  mutate(mean_rr = exp(mean_value)) %>%
+  ggplot(aes(x = mean_rr)) + 
+  geom_histogram(bins = 30) 
+
+## Here are the cities with the largest heatwave effects, city averages
+hw %>%
+  select(city, post.estimate) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(post.estimate)) %>%
+  mutate(mean_rr = exp(mean_value)) %>%
+  arrange(desc(mean_rr)) %>%
+  select(-mean_value) %>%
+  slice(1:10)
+
+## Here are the cities with the smallest heatwave effects, city averages
+hw %>%
+  select(city, post.estimate) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(post.estimate)) %>%
+  mutate(mean_rr = exp(mean_value)) %>%
+  arrange(mean_rr) %>%
+  select(-mean_value) %>%
+  slice(1:10)
+
+## Here is a map of average heatwave effects
+hw %>%
+  select(city, post.estimate) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(post.estimate)) %>%
+  mutate(mean_rr = exp(mean_value)) %>%
+  left_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = mean_rr, label = city)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+
+## Here are the distributions of heatwave lengths, city averages
+hw %>%
+  select(city, length) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(length)) %>%
+  ggplot(aes(x = mean_value)) + 
+  geom_histogram(bins = 30) 
+
+## Here are the cities with the longest heatwaves, city averages
+hw %>%
+  select(city, length) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(length)) %>%
+  arrange(desc(mean_value)) %>%
+  slice(1:10)
+
+## Here are the cities with the shortest heatwaves, city averages
+hw %>%
+  select(city, length) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(length)) %>%
+  arrange(mean_value) %>%
+  slice(1:10)
+
+## Here is a map of average heatwave lengths
+hw %>%
+  select(city, length) %>%
+  group_by(city) %>%
+  summarize(mean_value = mean(length)) %>%
+  left_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = mean_value, label = city)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+```
+
 
 The training data used to develop the predictive model were from `r length(unique(hw$city))` US communities over the years 1987-2005. This training dataset included all heatwaves in these communities over this time period, a total of `r prettyNum(nrow(hw), big.mark = ",")` heatwaves.
 
@@ -162,14 +346,16 @@ calc_mort <- function(city){
   print(city)
   
   city_df <- readRDS(paste0("~/tmp/NMMAPS/", city, ".rds")) %>%
+    dplyr::mutate(death = death + accident) %>%
     dplyr::group_by(date) %>%
-    dplyr::summarize(death = sum(alldeath), 
+    dplyr::summarize(death = sum(death), 
                      tmpd = first(tmpd)) %>%
     dplyr::ungroup()
   
   city_hws <- IDHeatwavesCPPwrapper(threshold = quantile(city_df$tmpd, 0.98,
                                                          na.rm = TRUE),
-                                    datafr = datafr, numDays = 2) %>%
+                                    datafr = select(city_df, date, tmpd),
+                                    numDays = 2) %>%
     dplyr::select(date, hw)
   
   city_df <- city_df %>%
@@ -180,21 +366,86 @@ calc_mort <- function(city){
   return(city_df$mean_death)
 }
 
+calc_total_mort <- function(city){
+  print(city)
+  
+  city_df <- readRDS(paste0("~/tmp/NMMAPS/", city, ".rds")) %>%
+    dplyr::mutate(death = death + accident) %>%
+    dplyr::group_by(date) %>%
+    dplyr::summarize(death = sum(death), 
+                     tmpd = first(tmpd)) %>%
+    dplyr::ungroup()
+  
+  study_years <- length(unique(lubridate::year(city_df$date)))
+  total_deaths <- sum(city_df$death) / 19 # average deaths per year
+  
+  return(total_deaths)
+}
+
 county_pops <- read.csv("nmmaps_counties.csv", as.is = TRUE) %>%
   select(city, pop) %>%
   group_by(city) %>%
   summarize(pop = sum(pop))
 
+# `base_mort` is the average daily mortality on non-heat wave days
+# `tot_mort` is the average total yearly mortality (heat wave and non-
+# heat wave days)
 base_deaths <- data.frame(city = cities,
                           base_mort = sapply(cities, calc_mort),
+                          tot_mort = sapply(cities, calc_total_mort),
                           stringsAsFactors = FALSE)
 base_deaths <- base_deaths %>%
   left_join(county_pops, by = "city") %>%
-  mutate(mort_rate = base_mort / pop)
+  mutate(mort_rate = base_mort / pop,
+         tot_year_mort_rate = tot_mort / pop)
 
 save(base_deaths, file = "base_deaths.RData")
 ```
 
+Here are some summaries on total mortalities in the historical data
+
+```{r message = FALSE, warning = FALSE}
+load("base_deaths.RData")
+
+## Cities with highest total mortality per year
+base_deaths %>% 
+  arrange(desc(tot_mort)) %>% 
+  slice(1:10) %>% 
+  select(city, base_mort, tot_mort, pop)
+
+## Cities with highest mortality per person (average on non-heat wave days)
+base_deaths %>% 
+  arrange(desc(mort_rate)) %>% 
+  slice(1:10) %>% 
+  select(city, mort_rate, tot_year_mort_rate, pop)
+
+## Here is the distribution of baseline (i.e., for non-heatwave days) daily mortality rate
+## per person in the study cities
+library(ggplot2)
+ggplot(base_deaths, aes(x = mort_rate)) + geom_histogram()
+
+## Here is a map of total mortality rates
+base_deaths %>%
+  right_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = tot_mort)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+
+## Here is a map of yearly total mortality rates per person
+base_deaths %>%
+  right_join(read_csv("cities.csv"), by = "city") %>%
+  ggplot(aes(x = long - 360, y = lat, color = tot_year_mort_rate * 100000)) + 
+  geom_polygon(data = us_map, aes(x = long, y = lat, 
+                                  group = group, color = NULL, label = NULL)) +
+  geom_point(size = 2) + 
+  #geom_text(color = "black", alpha = 0.5) + 
+  scale_color_distiller(palette = "RdYlGn") + 
+  theme_void()
+```
 
 Here is the code to predict from this model: 
 
@@ -210,8 +461,24 @@ proj_pops <- group_by(proj_pops, city) %>%
         mutate(pop.density = pop100 / arealand) %>%
         dplyr::select(-arealand) %>%
   mutate(city = as.character(city))
+
+## Here are expected yearly numbers of deaths in some of the larger cities
+proj_pops %>% 
+  left_join(base_deaths, by = "city") %>%
+  mutate(expected_yearly_mort = tot_year_mort_rate * pop) %>%
+  arrange(desc(expected_yearly_mort)) %>%
+  select(city, expected_yearly_mort) %>%
+  slice(1:10)
+
+## Here is the total expected yearly deaths in all the cities, based on SSP5
+proj_pops %>% 
+  left_join(base_deaths, by = "city") %>%
+  mutate(expected_yearly_mort = tot_year_mort_rate * pop) %>%
+  summarize(expected_yearly_mort = sum(expected_yearly_mort),
+            expect_20_yr_mort = round(20 * sum(expected_yearly_mort)))
+
 proj_hws <- left_join(proj_hws, proj_pops, by = "city") %>%
-  left_join(base_deaths, by = "city")
+  left_join(select(base_deaths, city, mort_rate), by = "city")
 
 # Get predicted log RR for all of the heatwaves
 projs_rf <- predict(rf_mod, newdata = proj_hws)
@@ -220,11 +487,18 @@ hist(exp(projs_rf))
 hw_length <- proj_hws$length
 base_mort <- proj_hws$pop100 * proj_hws$mort_rate
 
-hw_length[1] * base_mort[1] # expected mortality during first HW without HW
+hist(base_mort)
+
+hw_length[1] * base_mort[1] # expected mortality during first HW 
+                            # under no-HW counterfactual
 exp(projs_rf[1]) - 1 # Percent increase from first heatwave
 hw_length[1] * base_mort[1] * (exp(projs_rf[1]) - 1) # Expected excess from HW1
 
 exp_excess <- (exp(projs_rf) - 1) * hw_length * base_mort
+hist(exp_excess)
+summary(exp_excess)
+## Heat wave with highest expected mortality
+proj_hws[exp_excess == max(exp_excess), ]
 sum(exp_excess)
 ```
 

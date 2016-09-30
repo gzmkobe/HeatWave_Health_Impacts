@@ -128,21 +128,21 @@ hw_data$post.se <- hw.pooled$SDtheta
 
 save(hw_data, file = "data-raw/ListOfAllHeatwaves.Rdata")
 
-# Checks on effects of using posteriors
-library(ggplot2)
-y.range <- range(exp(hw_data$Estimate), exp(hw_data$post.estimate))
-library(scales)
-ggplot(hw_data, aes(x = pop100, y = exp(Estimate))) + 
-  geom_point(alpha = 0.3) + 
-  ylab("Relative risk") + xlab("Population") + 
-  scale_y_continuous(limits = y.range) + 
-  scale_x_continuous(labels = comma)
-ggplot(hw_data, aes(x = pop100, y = exp(post.estimate))) + 
-  geom_point(alpha = 0.3) + 
-  ylab("Relative risk") + xlab("Population") + 
-  scale_y_continuous(limits = y.range) + 
-  scale_x_continuous(labels = comma)
-
-
+# # Checks on effects of using posteriors
+# library(ggplot2)
+# y.range <- range(exp(hw_data$Estimate), exp(hw_data$post.estimate))
+# library(scales)
+# ggplot(hw_data, aes(x = pop100, y = exp(Estimate))) + 
+#   geom_point(alpha = 0.3) + 
+#   ylab("Relative risk") + xlab("Population") + 
+#   scale_y_continuous(limits = y.range) + 
+#   scale_x_continuous(labels = comma)
+# ggplot(hw_data, aes(x = pop100, y = exp(post.estimate))) + 
+#   geom_point(alpha = 0.3) + 
+#   ylab("Relative risk") + xlab("Population") + 
+#   scale_y_continuous(limits = y.range) + 
+#   scale_x_continuous(labels = comma)
+# 
+# 
 
 
