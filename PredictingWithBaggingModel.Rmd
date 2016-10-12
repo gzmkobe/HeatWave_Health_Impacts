@@ -480,7 +480,8 @@ proj_pops %>%
 proj_hws <- left_join(proj_hws, proj_pops, by = "city") %>%
   left_join(select(base_deaths, city, mort_rate), by = "city")
 
-# Get predicted log RR for all of the heatwaves
+# Get predicted log RR for all of the heatwaves. This is for projected
+# heat waves under climate change
 projs_rf <- predict(rf_mod, newdata = proj_hws)
 hist(exp(projs_rf))
 
@@ -500,5 +501,28 @@ summary(exp_excess)
 ## Heat wave with highest expected mortality
 proj_hws[exp_excess == max(exp_excess), ]
 sum(exp_excess)
+
+# Here are some estimates of total heat wave-related mortality 
+# for the historical observed data
+hist_hws <- left_join(hw, select(base_deaths, city, mort_rate),
+                      by = "city")
+hist_rf <- predict(rf_mod, newdata = hist_hws)
+
+hw_length <- hist_hws$length
+base_mort <- hist_hws$pop100 * hist_hws$mort_rate
+
+exp_excess <- (exp(hist_rf) - 1) * hw_length * base_mort
+hist(exp_excess)
+summary(exp_excess)
+## Heat wave with highest expected mortality
+as.data.frame(hist_hws[exp_excess == max(exp_excess), ])
+sum(exp_excess)
+
+## Here is the present-day total population in these 83 cities
+hw %>% 
+  group_by(city) %>% 
+  summarize(pop = first(pop100)) %>% 
+  ungroup() %>%
+  summarize(total_pop = sum(pop))
 ```
 
